@@ -2,4 +2,4 @@
 소개론4조 DP팀 저장소 입니다.
 kimjonghak
 jeongjuhyeon
-test2 for local workspace
+test2 for local workspace..

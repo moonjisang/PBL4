@@ -1,0 +1,70 @@
+#include <SoftwareSerial.h>
+#include "DHT.h"  //온습도 측정을 위해 DHT.h 라이브러리 사용
+#include <ArduinoJson.h>
+#define DHTPIN 4
+#define DHTTYPE DHT11  //DHT11센서로 온습도 측정
+#define buzzer 5
+
+DHT dht(DHTPIN, DHTTYPE);
+SoftwareSerial HC06(2,3); // TX, RX 번호 지정(입출력 통신위해)
+float temp1;
+float temp2;
+
+void setup() {
+  
+  Serial.begin(9600); //  아두이노 - pc간 통신(9600 보드레이트)
+  HC06.begin(9600); //아두이노 - 블루투스모듈간 통신
+  dht.begin();
+  pinMode(7, OUTPUT);  // LED출력을 위한 설정
+}
+
+void loop() {
+  
+  float h = dht.readHumidity();  //습도값 저장
+  float t = dht.readTemperature();  //온도값 저장
+  
+  if(HC06.available()){
+    String data = HC06.readStringUntil(0x0A);
+    StaticJsonDocument<64> doc;
+    deserializeJson(doc, data);
+    
+    String cmd = doc["cmd"]; // 커맨드"temp"가 들어왔을 떄
+    String data1 = doc["data1"]; //온도 최댓값
+    String data2 = doc["data2"]; //온도 최솟값
+    
+    if(cmd == "temp"){
+      temp1 = data1.toFloat();  //data1(최대 온도값을 소수형으로 저장
+      temp2 = data2.toFloat(); 
+      
+      Serial.println("온도 최댓값을 " + data1 + "으로 설정했습니다!");  //시리얼 모니터에 설정된 최대 온도값 출력
+      Serial.println("온도 최솟값을 " + data2 + "으로 설정했습니다!");
+    }
+  }
+    
+  if (h > 80 || h < 30) {  //습도가 30미만이거나 80초과면 쾌적하지 않은 날씨임
+    Serial.println("현재 습도상 쾌적함을 위해 창문 닫기.");
+    tone(buzzer, 3136);  //창문 닫는동작 대신 버저 소리로 대체(모터 도착시 변경 예정)
+  }
+  else{  //습도 30~80사이면 쾌적하다고 볼 수 있음. 창문열기 가능
+    if (t > 30) {  //실내가 더운 케이스이므로 창문 열기.
+      Serial.println("더운 집안을 위해 창문 열기.");
+      digitalWrite(7, HIGH);  //LED에 HIGH로 출력. 라이트 ON(모터 도착시 변경 예정)
+      delay(1000);
+    }
+    else if (t < 27) {  //실내가 추운 케이스, 창문 닫기
+      Serial.println("추운 집안을 위해 창문 닫기.");
+      digitalWrite(7, HIGH);
+      delay(1000);
+    }
+    else {  //온도 기준선 사이면 그냥 현재 창문상태 유지
+      Serial.println("현재 상태 유지");
+      digitalWrite(7, LOW);  //현재 상태 유지인것을 보여주기 위해 LED off
+      delay(1000);
+    }
+    noTone(buzzer);  //습도조건에 걸리지 않으면 버저가 울리지 않음
+  }
+  
+  String data = String(h) + "," + String(t);  //블루투스 모듈에게 전송해주는 데이터(습도, 온도값) 저장
+  HC06.println(data);  //블루투스 모델에게 온도, 습도값 데이터 전송
+  delay(1000);
+}

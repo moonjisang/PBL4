@@ -48,8 +48,17 @@ void loop() {
   else{  //습도 30~80사이면 쾌적하다고 볼 수 있음. 창문열기 가능
     if (t > 30) {  //실내가 더운 케이스이므로 창문 열기.
       Serial.println("더운 집안을 위해 창문 열기.");
-      digitalWrite(7, HIGH);  //LED에 HIGH로 출력. 라이트 ON(모터 도착시 변경 예정)
-      delay(1000);
+      
+      digitalWrite(STEP_ENA_PIN, LOW);  //모터 사용
+      start_millis = millis();
+      while { (millis() - start_millis) < 5000 } //5초동안 정방향으로 모터 회전
+      {
+        digitalWrite(STEP_DIR_PIN, HIGH);  // 방향 설정하기
+        digitalWrite(STEP_DIR_PIN, HIGH);  // STEP 신호 전송하기
+        digitalWrite(STEP_DIR_PIN, LOW);  
+        delayWicroseconds(STEP_DELAY_NICRDS);
+        }
+      
     }
     else if (t < 27) {  //실내가 추운 케이스, 창문 닫기
       Serial.println("추운 집안을 위해 창문 닫기.");

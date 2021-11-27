@@ -19,6 +19,8 @@ int sampling = 280;  // 적외선 lde를 키고, 센서값을 읽어 미세먼�
 int waiting = 40;
 float stop_time = 9680;  // 센서를 구동하지 않는 시간
 
+int cds = A1;  // 조도센서 A1으로 지정
+
 void setup() {
   
   Serial.begin(9600); //  아두이노 - pc간 통신(9600 보드레이트)
@@ -38,7 +40,23 @@ void loop() {
   dustDensityug = (0.17* (dust_value * (5.0 / 1024)) - 0.1) * 1000;  // 미세먼지 값 계산
   Serial.print("Dust Density [ug/m3]: ");  // 시리얼 모니터에 미세먼지값 출력
   Serial.print(dustDensityug);
-  
+
+  int cds_value = analogRead(cds);  // 조도값 저장
+  Serial.print("cds= ");
+  Serial.println(cds_value);
+
+
+  if(cds_value <= 100) {  // 밝은경우
+    Serial.println("밝기 때문에 커튼 열기.");
+    digitalWrite();  //(모터 도착시 변경 예정)
+    delay(1000);
+  }
+  else {  // 어두운 경우
+    Serial.println("아둡기 때문에 커튼 닫기.");
+    digitalWrite();  //(모터 도착시 변경 예정)
+    delay(1000);
+  }
+    
   if(HC06.available()){
     String data = HC06.readStringUntil(0x0A);
     StaticJsonDocument<64> doc;
@@ -90,9 +108,11 @@ void loop() {
     }
   }
   
-  String send_data1 = String(h) + "," + String(t);  //블루투스 모듈에게 전송해주는 데이터(습도, 온도값) 저장
-  HC06.println(send_data1);  //블루투스 모델에게 온도, 습도값 데이터 전송
-  String send_data2= String(dustDensityug);  //블루투스 모듈에게 전송해주는 데이터(미세먼지값) 저장
-  HC06.println(send_data2);  //블루투스 모델에게 미세먼지값 데이터 전송
+  String send_humidTempdata = String(h) + "," + String(t);  //블루투스 모듈에게 전송해주는 데이터(습도, 온도값) 저장
+  HC06.println(send_humidTempdata);  //블루투스 모델에게 온도, 습도값 데이터 전송
+  String send_dustdata= String(dustDensityug);  //블루투스 모듈에게 전송해주는 데이터(미세먼지값) 저장
+  HC06.println(send_dustdata);  //블루투스 모델에게 미세먼지값 데이터 전송
+  String send_cdsdata= String(cds_value);  //블루투스 모듈에게 전송해주는 데이터(조도값) 저장
+  HC06.println(send_cdsdata);  //블루투스 모델에게 조도값 데이터 전송
   delay(1000);
 }

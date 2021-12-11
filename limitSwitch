@@ -1,0 +1,17 @@
+#define SWITCH1 3 //창문 열때 리미트스위치
+#define SWITCH2 4 //창문 닫을때 리미트스위치
+
+void setup() { 
+  pinMode(SWITCH1, INPUT); 
+  pinMode(SWITCH2, INPUT); 
+  Serial.begin(9600);
+} 
+
+void loop() { 
+  if(digitalRead(SWITCH1) == HIGH){ //스위치가 눌린다면
+    Serial.println("Stop_open!"); 
+  } 
+  if(digitalRead(SWITCH2) == HIGH){ 
+    Serial.println("Stop_close"); 
+  } 
+}

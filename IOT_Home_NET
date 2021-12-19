@@ -1,0 +1,320 @@
+#include <SoftwareSerial.h>
+#include "DHT.h"  //온습도 측정을 위해 DHT.h 라이브러리 사용
+#include <ArduinoJson.h>
+#define DHTPIN 4
+#define DHTTYPE DHT11  //DHT11센서로 온습도 측정
+#define buzzer 5
+#define SWITCH1 6 //창문 열때 리미트스위치
+#define SWITCH2 7 //창문 닫을때 리미트스위치
+
+DHT dht(DHTPIN, DHTTYPE);
+SoftwareSerial HC06(52,53); // TX, RX 번호 지정(입출력 통신위해)
+int cds = A1;  // 조도센서 A1으로 지정
+
+int dust_sensor = A0; // 미세먼지 센서 핀 번호
+float dust_value = 0;  // 센서에서 받은 미세먼지 값
+float dustDensityug = 0;  // ug/m^3 값
+
+int sensor_led = 12;  // 미세먼지 센서 안에 있는 적외선 led 핀번호
+int sampling = 280;  // 적외선 lde를 키고, 센서값을 읽어 미세먼지 측정하는 샘플링시간
+int waiting = 40;
+float stop_time = 9680;  // 센서를 구동하지 않는 시간
+float dust_init = 0;
+float dust_initial = 0;
+
+int ENA=14;
+int IN1=15;
+int IN2=16;
+int ENB=17;
+int IN3=18;
+int IN4=19;
+
+int ENA2=34;
+int IN12=35;
+int IN22=36;
+int ENB2=37;
+int IN32=38;
+int IN42=39;
+
+// 초기 온도 경계값 지정
+float Maxtemp = 27;
+float Mintemp = 25;
+
+int blind_flag = 0;
+boolean windowR = true;
+boolean windowL = true;
+
+void setup() {
+
+  pinMode(SWITCH1, INPUT); 
+  pinMode(SWITCH2, INPUT); 
+  pinMode(ENA,OUTPUT);
+  pinMode(ENB,OUTPUT);
+  pinMode(IN1,OUTPUT);
+  pinMode(IN2,OUTPUT);
+  pinMode(IN3,OUTPUT);
+  pinMode(IN4,OUTPUT);
+  digitalWrite(ENA,HIGH);
+  digitalWrite(ENB,HIGH);
+
+  pinMode(ENA2,OUTPUT);
+  pinMode(ENB2,OUTPUT);
+  pinMode(IN12,OUTPUT);
+  pinMode(IN22,OUTPUT);
+  pinMode(IN32,OUTPUT);
+  pinMode(IN42,OUTPUT);
+  digitalWrite(ENA2,HIGH);
+  digitalWrite(ENB2,HIGH);
+  
+  Serial.begin(9600); //  아두이노 - pc간 통신(9600 보드레이트)
+  HC06.begin(9600); //아두이노 - 블루투스모듈간 통신
+  dht.begin();
+  pinMode(sensor_led, OUTPUT);  // 미세먼지 센서를 위한 설정
+
+  for(int i = 0; i<5; i++) {
+    digitalWrite(sensor_led, LOW);
+    delayMicroseconds(sampling);  // 샘플링 시간
+    dust_init += analogRead(dust_sensor);
+    delayMicroseconds(waiting);
+    digitalWrite(sensor_led, HIGH);
+    delayMicroseconds(stop_time);  
+  }
+  dust_initial = (((dust_init/5)*5.0)/1024.0);
+  Serial.print("dust_initial : ");
+  Serial.println(dust_initial);
+}
+void CW() {
+ digitalWrite(IN1,LOW);
+ digitalWrite(IN2,HIGH);
+ digitalWrite(IN3,HIGH);
+ digitalWrite(IN4,LOW);
+ delay(10);
+
+ digitalWrite(IN1,LOW);
+ digitalWrite(IN2,HIGH);
+ digitalWrite(IN3,LOW);
+ digitalWrite(IN4,HIGH);
+ delay(10);
+
+ digitalWrite(IN1,HIGH);
+ digitalWrite(IN2,LOW);
+ digitalWrite(IN3,LOW);
+ digitalWrite(IN4,HIGH);
+ delay(10);
+
+ digitalWrite(IN1,HIGH);
+ digitalWrite(IN2,LOW);
+ digitalWrite(IN3,HIGH);
+ digitalWrite(IN4,LOW);
+ delay(10);
+}
+
+void CCW() {
+ digitalWrite(IN1,HIGH);
+ digitalWrite(IN2,LOW);
+ digitalWrite(IN3,HIGH);
+ digitalWrite(IN4,LOW);
+ delay(10);
+
+ digitalWrite(IN1,HIGH);
+ digitalWrite(IN2,LOW);
+ digitalWrite(IN3,LOW);
+ digitalWrite(IN4,HIGH);
+ delay(10);
+
+ digitalWrite(IN1,LOW);
+ digitalWrite(IN2,HIGH);
+ digitalWrite(IN3,LOW);
+ digitalWrite(IN4,HIGH);
+ delay(10);
+
+ digitalWrite(IN1,LOW);
+ digitalWrite(IN2,HIGH);
+ digitalWrite(IN3,HIGH);
+ digitalWrite(IN4,LOW);
+ delay(10);
+}
+
+void CW2() {
+ digitalWrite(IN12,LOW);
+ digitalWrite(IN22,HIGH);
+ digitalWrite(IN32,HIGH);
+ digitalWrite(IN42,LOW);
+ delay(10);
+
+ digitalWrite(IN12,LOW);
+ digitalWrite(IN22,HIGH);
+ digitalWrite(IN32,LOW);
+ digitalWrite(IN42,HIGH);
+ delay(10);
+
+ digitalWrite(IN12,HIGH);
+ digitalWrite(IN22,LOW);
+ digitalWrite(IN32,LOW);
+ digitalWrite(IN42,HIGH);
+ delay(10);
+
+ digitalWrite(IN12,HIGH);
+ digitalWrite(IN22,LOW);
+ digitalWrite(IN32,HIGH);
+ digitalWrite(IN42,LOW);
+ delay(10);
+}
+
+void CCW2() {
+ digitalWrite(IN12,HIGH);
+ digitalWrite(IN22,LOW);
+ digitalWrite(IN32,HIGH);
+ digitalWrite(IN42,LOW);
+ delay(10);
+
+ digitalWrite(IN12,HIGH);
+ digitalWrite(IN22,LOW);
+ digitalWrite(IN32,LOW);
+ digitalWrite(IN42,HIGH);
+ delay(10);
+
+ digitalWrite(IN12,LOW);
+ digitalWrite(IN22,HIGH);
+ digitalWrite(IN32,LOW);
+ digitalWrite(IN42,HIGH);
+ delay(10);
+
+ digitalWrite(IN12,LOW);
+ digitalWrite(IN22,HIGH);
+ digitalWrite(IN32,HIGH);
+ digitalWrite(IN42,LOW);
+ delay(10);
+}
+
+void loop() {
+  
+  float h = dht.readHumidity();  //습도값 저장
+  float t = dht.readTemperature();  //온도값 저장
+  int cds_value = analogRead(cds);  // 조도값 저장
+  
+  Serial.print("cds= ");
+  Serial.println(cds_value);
+
+  digitalWrite(sensor_led, LOW);
+  delayMicroseconds(sampling);  // 다량의 데이터 입력 피하기 위해 딜레이
+  dust_value = analogRead(dust_sensor);
+  delayMicroseconds(waiting);
+  digitalWrite(sensor_led, HIGH);
+  delayMicroseconds(stop_time);
+  dustDensityug = (((dust_value*(5.0/1024)) - dust_initial)/0.005); // 미세먼지 값 계산
+  Serial.print("Dust Density [ug/m3]: ");  // 시리얼 모니터에 미세먼지값 출력
+  Serial.println(dustDensityug);
+
+   
+  if(digitalRead(SWITCH2) == HIGH){ 
+    Serial.println("sw2"); 
+  }
+  
+  if(HC06.available()){
+    String data = HC06.readStringUntil(0x0A);
+    Serial.println(data);
+    StaticJsonDocument<64> doc;
+    deserializeJson(doc, data);
+    
+    String cmd = doc["cmd"]; // 커맨드"set"가 들어왔을 떄
+    String data1 = doc["data1"]; //온도 최댓값
+    String data2 = doc["data2"]; //온도 최솟값
+    
+    if(cmd == "set"){  // 기준값 설정
+
+      Maxtemp = data1.toFloat();
+      Mintemp = data2.toFloat();
+      
+      Serial.println("온도 최댓값을 " + data1 + "으로 설정했습니다!");  //시리얼 모니터에 설정된 최대 온도값 출력
+      Serial.println("온도 최솟값을 " + data2 + "으로 설정했습니다!");
+    }
+  }
+
+  if (cds_value < 70) {  // 밝을 경우 커튼 내리기, CCW
+    Serial.println("조도가 70보다 작습니다");
+    if (blind_flag == 0) {
+      for (int c = 0; c<400; c++) {
+        CCW();
+      }
+      blind_flag = 1;
+    }
+    else {
+      Serial.println("현재 커튼은 내려져있는 상태");
+    }
+         
+  }
+  
+  else {  // 어두운 경우 커튼 올리기, CW
+    Serial.println("조도가 70보다 큽니다");
+    if (blind_flag == 1) {
+      for (int c = 0; c<400; c++) {
+        CW();
+      }
+      blind_flag = 0;
+    }
+    else {
+      Serial.println("현재 커튼은 올려져 있는 상태");
+    }
+  }
+
+  if (dustDensityug <200) {  // 미세먼지가 별로 없음, 창문열기 가능
+    
+    if (h > 80 || h < 30) {  //습도가 30미만이거나 80초과면 쾌적하지 않은 날씨임
+      Serial.println("현재 습도상 쾌적함을 위해 창문 닫기.");
+      while (windowL) {
+        CCW2();
+        if(digitalRead(SWITCH1) == HIGH){ //스위치가 눌린다면
+          Serial.println("sw1!");
+          windowL = false;
+          windowR = true;
+        }
+      }
+      
+    }
+    else{  //습도 30~80사이면 쾌적하다고 볼 수 있음. 창문열기 가능
+      if (t > Maxtemp) {  //실내가 더운 케이스이므로 창문 열기.
+        Serial.println("더운 집안을 위해 창문 열기.");
+        while (windowR) {
+          CW2();
+          if(digitalRead(SWITCH2) == HIGH){ //스위치가 눌린다면
+          Serial.println("sw2!");
+          windowR = false;
+          windowL = true;
+          }
+        }
+      }
+      else if (t < Mintemp) {  //실내가 추운 케이스, 창문 닫기
+        Serial.println("추운 집안을 위해 창문 닫기.");
+        while (windowL) {
+          CCW2();
+          if(digitalRead(SWITCH1) == HIGH){ //스위치가 눌린다면
+            Serial.println("sw1!");
+            windowL = false;
+            windowR = true;
+          }
+        }
+        delay(1000);
+      }
+      else {  //온도 기준선 사이면 그냥 현재 창문상태 유지
+        Serial.println("현재 상태 유지");
+        delay(1000);
+      }
+    }
+  }
+  else {  // 미세먼지가 많음 창문 닫기
+    Serial.println("추운 집안을 위해 창문 닫기.");
+    while (windowL) {
+      CCW2();
+      if(digitalRead(SWITCH1) == HIGH){ //스위치가 눌린다면
+        Serial.println("sw1!");
+        windowL = false;
+        windowR = true;
+      }
+    }
+      
+  }
+  String data = String(h) + "," + String(t);  //블루투스 모듈에게 전송해주는 데이터(습도, 온도값) 저장
+  HC06.println(data);  //블루투스 모델에게 온도, 습도값 데이터 전송
+  delay(1000);
+}

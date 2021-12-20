@@ -37,12 +37,26 @@ int IN32=38;
 int IN42=39;
 
 // 초기 온도 경계값 지정
-float Maxtemp = 27;
-float Mintemp = 25;
+float Maxtemp = 30;
+float Mintemp = 15;
+float Maxhumid = 80;
+float Minhumid = 30;
+float Maxdust = 500;
+float Mindust = 150;
+float Maxcds = 700;
+float Mincds = 80;
 
 int blind_flag = 0;
 boolean windowR = true;
 boolean windowL = true;
+
+String dust_alarm;
+String cds_alarm;
+
+int h_case = 0;
+int t_case = 0;
+int d_case = 0;
+int c_case = 0;
 
 void setup() {
 
@@ -189,6 +203,7 @@ void CCW2() {
 
 void loop() {
   
+
   float h = dht.readHumidity();  //습도값 저장
   float t = dht.readTemperature();  //온도값 저장
   int cds_value = analogRead(cds);  // 조도값 저장
@@ -205,11 +220,6 @@ void loop() {
   dustDensityug = (((dust_value*(5.0/1024)) - dust_initial)/0.005); // 미세먼지 값 계산
   Serial.print("Dust Density [ug/m3]: ");  // 시리얼 모니터에 미세먼지값 출력
   Serial.println(dustDensityug);
-
-   
-  if(digitalRead(SWITCH2) == HIGH){ 
-    Serial.println("sw2"); 
-  }
   
   if(HC06.available()){
     String data = HC06.readStringUntil(0x0A);
@@ -229,14 +239,72 @@ void loop() {
       Serial.println("온도 최댓값을 " + data1 + "으로 설정했습니다!");  //시리얼 모니터에 설정된 최대 온도값 출력
       Serial.println("온도 최솟값을 " + data2 + "으로 설정했습니다!");
     }
+    else if (cmd == "humid1") {
+      Maxhumid = 80.0;
+      Minhumid = 30.0;
+      Serial.println("습도민감도를 1로 설정하였습니다.");
+    }
+    else if (cmd == "humid2") {
+      Maxhumid = 70.0;
+      Minhumid = 35.0;
+      Serial.println("습도민감도를 2로 설정하였습니다.");
+    }
+    else if (cmd == "dust1") {
+      Maxdust = 500.0;
+      Mindust = 150.0;
+      Serial.println("미세먼지민감도를 1로 설정하였습니다.");
+    }
+    else if (cmd == "dust2") {
+      Maxdust = 400.0;
+      Mindust = 150.0;
+      Serial.println("미세먼지민감도를 2로 설정하였습니다.");
+    }
+    else if (cmd == "cds1") {
+      Maxcds = 700.0;
+      Mincds = 80.0;
+      Serial.println("조도민감도를 1로 설정하였습니다.");
+    }
+    else if (cmd == "cds2") {
+      Maxcds = 600.0;
+      Mincds = 70.0;
+      Serial.println("조도민감도를 2로 설정하였습니다.");
+    }
+    else if (cmd == "on") {
+        Serial.println("on");
+        boolean passive_control = true;
+        while(passive_control) {
+          String data = HC06.readStringUntil(0x0A);
+          Serial.println(data);
+          StaticJsonDocument<64> doc;
+          deserializeJson(doc, data);
+          
+          String cmd = doc["cmd"]; // 커맨드"set"가 들어왔을 떄
+          String data1 = doc["data1"]; //온도 최댓값
+          String data2 = doc["data2"]; //온도 최솟값
+          Serial.println("반복");
+          if (cmd == "off") {
+            Serial.println("off");
+            passive_control = false;
+          }
+        }
+      }
+    else {
+      Serial.println("error");
+    }
   }
 
-  if (cds_value < 70) {  // 밝을 경우 커튼 내리기, CCW
+  if (cds_value < Mincds) {  // 밝을 경우 커튼 내리기, CCW
+    String cds_alarm = "Bright";
     Serial.println("조도가 70보다 작습니다");
+    c_case = 0;
     if (blind_flag == 0) {
-      for (int c = 0; c<400; c++) {
+      digitalWrite(ENA,HIGH);
+      digitalWrite(ENB,HIGH);
+      for (int c = 0; c<200; c++) {
         CCW();
       }
+      digitalWrite(ENA,LOW);
+      digitalWrite(ENB,LOW);
       blind_flag = 1;
     }
     else {
@@ -245,76 +313,125 @@ void loop() {
          
   }
   
-  else {  // 어두운 경우 커튼 올리기, CW
+  else if (cds_value > Maxcds) {  // 어두운 경우 커튼 올리기, CW
+    String cds_alarm = "Dark";
     Serial.println("조도가 70보다 큽니다");
+    c_case = 2;
     if (blind_flag == 1) {
-      for (int c = 0; c<400; c++) {
+      digitalWrite(ENA,HIGH);
+      digitalWrite(ENB,HIGH);
+      for (int c = 0; c<200; c++) {
         CW();
       }
+      digitalWrite(ENA,LOW);
+      digitalWrite(ENB,LOW);
       blind_flag = 0;
     }
     else {
       Serial.println("현재 커튼은 올려져 있는 상태");
     }
+  }                                                                            
+  else {
+    c_case = 1;
+    Serial.println("현재 블라인드 상태 유지");
   }
 
-  if (dustDensityug <200) {  // 미세먼지가 별로 없음, 창문열기 가능
-    
-    if (h > 80 || h < 30) {  //습도가 30미만이거나 80초과면 쾌적하지 않은 날씨임
+  if (dustDensityug <Mindust) {  // 미세먼지가 별로 없음, 창문열기 가능
+    String dust_alarm = "Good";
+    d_case = 9;
+    Serial.println("no dust");
+    if (h > Maxhumid || h < Minhumid) {  //습도가 30미만이거나 80초과면 쾌적하지 않은 날씨임
       Serial.println("현재 습도상 쾌적함을 위해 창문 닫기.");
+      h_case = 3;
+      Serial.println("h-close");
       while (windowL) {
+        digitalWrite(ENA2,HIGH);
+        digitalWrite(ENB2,HIGH);
         CCW2();
         if(digitalRead(SWITCH1) == HIGH){ //스위치가 눌린다면
           Serial.println("sw1!");
           windowL = false;
           windowR = true;
+          digitalWrite(ENA2,LOW);
+          digitalWrite(ENB2,LOW);
         }
       }
       
     }
     else{  //습도 30~80사이면 쾌적하다고 볼 수 있음. 창문열기 가능
+      h_case = 0;
       if (t > Maxtemp) {  //실내가 더운 케이스이므로 창문 열기.
         Serial.println("더운 집안을 위해 창문 열기.");
+        t_case = 4;
+        Serial.println("t-open");
         while (windowR) {
+          digitalWrite(ENA2,HIGH);
+          digitalWrite(ENB2,HIGH);
           CW2();
           if(digitalRead(SWITCH2) == HIGH){ //스위치가 눌린다면
           Serial.println("sw2!");
           windowR = false;
           windowL = true;
+          digitalWrite(ENA2,LOW);
+          digitalWrite(ENB2,LOW);
           }
         }
       }
       else if (t < Mintemp) {  //실내가 추운 케이스, 창문 닫기
         Serial.println("추운 집안을 위해 창문 닫기.");
+        t_case = 5;
+        Serial.println("t-close");
         while (windowL) {
+          digitalWrite(ENA2,HIGH);
+          digitalWrite(ENB2,HIGH);
           CCW2();
           if(digitalRead(SWITCH1) == HIGH){ //스위치가 눌린다면
             Serial.println("sw1!");
             windowL = false;
             windowR = true;
+            digitalWrite(ENA2,LOW);
+            digitalWrite(ENB2,LOW);
           }
         }
-        delay(1000);
       }
       else {  //온도 기준선 사이면 그냥 현재 창문상태 유지
         Serial.println("현재 상태 유지");
-        delay(1000);
+        t_case = 6;
+        Serial.println("t-medium");
       }
     }
   }
-  else {  // 미세먼지가 많음 창문 닫기
-    Serial.println("추운 집안을 위해 창문 닫기.");
+  else if (dustDensityug > Maxdust){  // 미세먼지가 많음 창문 닫기
+    String dust_alarm = "Bad";
+    Serial.println("미세먼지가 많아 창문 닫기.");
+    d_case = 7;
+    h_case = 0;
+    t_case = 0;
+    Serial.println("d-close");
     while (windowL) {
+      digitalWrite(ENA2,HIGH);
+      digitalWrite(ENB2,HIGH);
       CCW2();
       if(digitalRead(SWITCH1) == HIGH){ //스위치가 눌린다면
         Serial.println("sw1!");
         windowL = false;
         windowR = true;
+        digitalWrite(ENA2,LOW);
+        digitalWrite(ENB2,LOW);
       }
     }
       
   }
-  String data = String(h) + "," + String(t);  //블루투스 모듈에게 전송해주는 데이터(습도, 온도값) 저장
+  else {
+    Serial.println("미세먼지 보통, 현상태 유지");
+    d_case = 8;
+    Serial.println("d-medium");
+  }
+  String data = String(h) + "," + String(t) + "," + String(h_case) + "," + String(t_case) + "," + String(d_case) + "," + String(c_case);  //블루투스 모듈에게 전송해주는 데이터 저장
   HC06.println(data);  //블루투스 모델에게 온도, 습도값 데이터 전송
+  Serial.println(h_case);
+  Serial.println(t_case);
+  Serial.println(d_case);
+  Serial.println(c_case);
   delay(1000);
 }
